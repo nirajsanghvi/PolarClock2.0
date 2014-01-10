@@ -1,0 +1,25 @@
+{
+    "versionLabel": "2.0",
+    "uuid": "2cb46e44-fe98-4027-8369-47b878e65200",
+    "appKeys": {},
+    "longName": "Polar Clock 2.0",
+    "versionCode": 2,
+    "capabilities": [
+        "configurable"
+    ],
+    "shortName": "Polar Clock 2.0",
+    "companyName": "Niraj Sanghvi",
+    "watchapp": {
+        "watchface": true
+    },
+    "resources": {
+        "media": [
+            {
+                "menuIcon": true,
+                "type": "png",
+                "name": "IMAGE_MENU_ICON",
+                "file": "images/menu_icon_polar_clock.png"
+            }
+        ]
+    }
+}
