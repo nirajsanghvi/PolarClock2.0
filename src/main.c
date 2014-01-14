@@ -8,13 +8,31 @@
 
 #include "pebble.h"
 
+/* 
 #define SHOW_TEXT_TIME 1
 #define SHOW_TEXT_DATE 1
 #define ROW_DATE 0
-#define TWENTY_FOUR_HOUR_DIAL 0
+*/
 	
+enum {
+        KEY_TIME = 0x0,
+        KEY_DATE = 0x1,
+        KEY_ROW = 0x2,
+		KEY_INVERT = 0x3
+};
+
+static bool SHOW_TEXT_TIME = true;
+static bool SHOW_TEXT_DATE = true;
+static bool ROW_DATE = false;
+static bool INVERT = false;
+
+/*
 #define BACKGROUND_COLOR GColorBlack
 #define FOREGROUND_COLOR GColorWhite
+*/
+
+static GColor BACKGROUND_COLOR = GColorBlack;
+static GColor FOREGROUND_COLOR = GColorWhite;
 
 Window *window;
 
@@ -22,13 +40,10 @@ Layer *minute_display_layer;
 Layer *hour_display_layer;
 Layer *second_display_layer;
 
-#if SHOW_TEXT_TIME
 TextLayer *text_time_layer;
-#endif
-
-#if SHOW_TEXT_DATE
 TextLayer *text_date_layer;
-#endif
+bool time_layer_exists = false;
+bool date_layer_exists = false;
 
 const GPathInfo SECOND_SEGMENT_PATH_POINTS = {
   3,
@@ -131,12 +146,16 @@ static void hour_display_layer_update_callback(Layer *layer, GContext* ctx) {
 
   unsigned int angle;
 
+/*
   #if TWENTY_FOUR_HOUR_DIAL
     angle = (t->tm_hour * 15) + (t->tm_min / 4);
   #else
     angle = (( t->tm_hour % 12 ) * 30) + (t->tm_min / 2);
   #endif
-
+*/
+	
+  angle = (( t->tm_hour % 12 ) * 30) + (t->tm_min / 2);
+	  
   angle = angle - (angle % 6);
 
   GRect bounds = layer_get_bounds(layer);
@@ -166,49 +185,136 @@ static void handle_second_tick(struct tm *tick_time, TimeUnits units_changed) {
   layer_mark_dirty(minute_display_layer);
   layer_mark_dirty(hour_display_layer);
 
-  #if SHOW_TEXT_TIME
-
-  // Need to be static because it's used by the system later.
-  static char time_text[] = "00:00";
-
-  char *time_format;
-
-  if (clock_is_24h_style()) {
-    time_format = "%R";
-  } else {
-    time_format = "%I:%M";
+  if (SHOW_TEXT_TIME && time_layer_exists)
+  {
+	  // Need to be static because it's used by the system later.
+	  static char time_text[] = "00:00";
+	
+	  char *time_format;
+	
+	  if (clock_is_24h_style()) {
+		time_format = "%R";
+	  } else {
+		time_format = "%I:%M";
+	  }
+	
+	  strftime(time_text, sizeof(time_text), time_format, tick_time);
+	
+	  text_layer_set_text(text_time_layer, time_text);
   }
 
-  strftime(time_text, sizeof(time_text), time_format, tick_time);
+  if (SHOW_TEXT_DATE && date_layer_exists)
+  {
+	  static char date_text[] = "00 Xxx";
+	  if (ROW_DATE)
+	  {
+		  //date_text = "xx Xxx";
+	  	  strftime(date_text, sizeof(date_text), "%d %b", tick_time);
+	  } else {
+		  //date_text = "Xxx xx";
+	  	  strftime(date_text, sizeof(date_text), "%b %d", tick_time);
+	  }
+	  text_layer_set_text(text_date_layer, date_text);
+  }
+}
 
-  text_layer_set_text(text_time_layer, time_text);
-
-  #endif
-
-  #if SHOW_TEXT_DATE
+static void setup_time_date_layers() {
+	
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
+	
+  if(time_layer_exists) {
+	  text_layer_destroy(text_time_layer);
+	  time_layer_exists = false;	
+  }
   
-    #if ROW_DATE
-    static char date_text[] = "00 Xxx";
-    strftime(date_text, sizeof(date_text), "%e %b", tick_time);
-    #else
-    static char date_text[] = "Xxx 00";
-    strftime(date_text, sizeof(date_text), "%b %e", tick_time);
-    #endif
+  if(date_layer_exists) {
+	  text_layer_destroy(text_date_layer);
+	  date_layer_exists = false;		
+  }
+	
+  if (SHOW_TEXT_TIME)
+  {
+	  text_time_layer = text_layer_create(bounds);
+	  time_layer_exists = true;
+	  text_layer_set_text_color(text_time_layer, FOREGROUND_COLOR);
+	  text_layer_set_background_color(text_time_layer, GColorClear);
+	  text_layer_set_text_alignment(text_time_layer, GTextAlignmentCenter);
+	  
+	  text_layer_set_font(text_time_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
+	  layer_add_child(window_layer, text_layer_get_layer(text_time_layer));
+	  	
+	  if (SHOW_TEXT_DATE)
+	  {
+	  	layer_set_frame(text_layer_get_layer(text_time_layer), GRect(0, 57, 144, 168-57));
+	  } else {
+	  	layer_set_frame(text_layer_get_layer(text_time_layer), GRect(0, 70, 144, 168-70));
+	  }
+	  
+  }
 
-  text_layer_set_text(text_date_layer, date_text);
-
-  #endif
-
+  if (SHOW_TEXT_DATE)
+  {
+	  text_date_layer = text_layer_create(bounds);
+	  date_layer_exists = true;
+	  text_layer_set_text_color(text_date_layer, FOREGROUND_COLOR);
+	  text_layer_set_background_color(text_date_layer, GColorClear);
+	  text_layer_set_text_alignment(text_date_layer, GTextAlignmentCenter);
+	  
+	  text_layer_set_font(text_date_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
+	  layer_add_child(window_layer, text_layer_get_layer(text_date_layer));
+	  
+	  if (SHOW_TEXT_TIME)
+	  {
+		  layer_set_frame(text_layer_get_layer(text_date_layer), GRect(0, 80, 144, 168-80));
+	  } else {
+		  layer_set_frame(text_layer_get_layer(text_date_layer), GRect(0, 70, 144, 168-70));
+	  }
+	  
+  }
 }
 
  void in_received_handler(DictionaryIterator *received, void *context) {
-   // incoming message received
+	 Tuple *time_tuple = dict_find(received, KEY_TIME);
+	 Tuple *date_tuple = dict_find(received, KEY_DATE);
+	 Tuple *row_tuple = dict_find(received, KEY_ROW);
+	 Tuple *invert_tuple = dict_find(received, KEY_INVERT);
+	 
+	 //APP_LOG(APP_LOG_LEVEL_DEBUG, "KEY_TIME: %d, %d, %d", time_tuple->type, time_tuple->length, time_tuple->value->uint8 );
+	 //APP_LOG(APP_LOG_LEVEL_DEBUG, "KEY_DATE: %d, %d, %d", date_tuple->type, date_tuple->length, date_tuple->value->int8 );
+	 //APP_LOG(APP_LOG_LEVEL_DEBUG, "KEY_ROW: %d, %d, %d", row_tuple->type, row_tuple->length, row_tuple->value->int8 );
+	 //APP_LOG(APP_LOG_LEVEL_DEBUG, "KEY_INVERT: %d, %d, %d", invert_tuple->type, invert_tuple->length, invert_tuple->value->uint8 );
+	 
+	 //if((time_tuple->value->int8) == 1) APP_LOG(APP_LOG_LEVEL_DEBUG, "KEY_TIME is 1");
+	 
+	 SHOW_TEXT_TIME = time_tuple->value->int8 ? true : false;
+	 persist_write_bool(KEY_TIME, SHOW_TEXT_TIME);
+	 SHOW_TEXT_DATE = date_tuple->value->int8 ? true : false;
+	 persist_write_bool(KEY_DATE, SHOW_TEXT_DATE);
+	 ROW_DATE = row_tuple->value->int8 ? true : false;
+	 persist_write_bool(KEY_ROW, ROW_DATE);
+	 INVERT = invert_tuple->value->int8 ? true : false;
+	 persist_write_bool(KEY_INVERT, INVERT);
+	 if(INVERT)
+	 {
+		BACKGROUND_COLOR = GColorWhite;
+		FOREGROUND_COLOR = GColorBlack;
+	 }
+	 else
+	 {
+		BACKGROUND_COLOR = GColorBlack;
+		FOREGROUND_COLOR = GColorWhite;		 		 
+	 }
+	 window_set_background_color(window, BACKGROUND_COLOR);
+	 
+	 setup_time_date_layers();
  }
 
 
  void in_dropped_handler(AppMessageResult reason, void *context) {
    // incoming message dropped
  }
+
 
 static void init(void) {
   //(void)ctx;
@@ -217,6 +323,20 @@ static void init(void) {
   app_message_register_inbox_dropped(in_dropped_handler);
   app_message_open(64, 0);
 
+  if(persist_exists(KEY_TIME)) SHOW_TEXT_TIME = persist_read_bool(KEY_TIME);
+  if(persist_exists(KEY_DATE)) SHOW_TEXT_DATE = persist_read_bool(KEY_DATE);
+  if(persist_exists(KEY_ROW)) ROW_DATE = persist_read_bool(KEY_ROW);
+  if(persist_exists(KEY_INVERT)) INVERT = persist_read_bool(KEY_INVERT);
+	
+  if(INVERT) {
+	  BACKGROUND_COLOR = GColorWhite;
+	  FOREGROUND_COLOR = GColorBlack;
+  }
+  else {
+	  BACKGROUND_COLOR = GColorBlack;
+	  FOREGROUND_COLOR = GColorWhite;		 		 
+  }
+	
   window = window_create();
   window_set_background_color(window, BACKGROUND_COLOR);
   window_stack_push(window, true);
@@ -254,49 +374,8 @@ static void init(void) {
   hour_segment_path = gpath_create(&HOUR_SEGMENT_PATH_POINTS);
   gpath_move_to(hour_segment_path, grect_center_point(&bounds));
 
-  #if SHOW_TEXT_TIME
-
-  text_time_layer = text_layer_create(bounds);
-  //text_layer_init(text_time_layer, window.layer.frame);
-  text_layer_set_text_color(text_time_layer, FOREGROUND_COLOR);
-  text_layer_set_background_color(text_time_layer, GColorClear);
-  text_layer_set_text_alignment(text_time_layer, GTextAlignmentCenter);
-
-  #if SHOW_TEXT_DATE
-  //layer_set_frame(text_layer_get_layer(text_time_layer), GRect(47, 57, 144-47, 168-57));
-  layer_set_frame(text_layer_get_layer(text_time_layer), GRect(0, 57, 144, 168-57));
-  #else
-  //layer_set_frame(text_layer_get_layer(text_time_layer), GRect(47, 70, 144-47, 168-70));
-  layer_set_frame(text_layer_get_layer(text_time_layer), GRect(0, 70, 144, 168-70));
-  #endif
-
-  //text_layer_set_font(text_time_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ROBOTO_CONDENSED_21)));
-  text_layer_set_font(text_time_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
-  layer_add_child(window_layer, text_layer_get_layer(text_time_layer));
-
-  #endif
-
-  #if SHOW_TEXT_DATE
-
-  text_date_layer = text_layer_create(bounds);
-  //text_layer_init(&text_date_layer, window.layer.frame);
-  text_layer_set_text_color(text_date_layer, FOREGROUND_COLOR);
-  text_layer_set_background_color(text_date_layer, GColorClear);
-  text_layer_set_text_alignment(text_date_layer, GTextAlignmentCenter);
+  setup_time_date_layers();
 	
-    #if SHOW_TEXT_TIME
-    //layer_set_frame(text_layer_get_layer(text_date_layer), GRect(44, 80, 144-44, 168-80));
-	layer_set_frame(text_layer_get_layer(text_date_layer), GRect(0, 80, 144, 168-80));
-    #else
-    //layer_set_frame(text_layer_get_layer(text_date_layer), GRect(44, 70, 144-44, 168-70));
-	layer_set_frame(text_layer_get_layer(text_date_layer), GRect(0, 70, 144, 168-70));
-    #endif
-  //text_layer_set_font(text_date_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ROBOTO_CONDENSED_21)));
-  text_layer_set_font(text_date_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
-  layer_add_child(window_layer, text_layer_get_layer(text_date_layer));
-
-  #endif
-
   tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
 }
 
@@ -311,13 +390,8 @@ static void deinit(void) {
   layer_destroy(hour_display_layer);
   layer_destroy(second_display_layer);
 	
-  #if SHOW_TEXT_TIME
-  text_layer_destroy(text_time_layer);
-  #endif
-
-  #if SHOW_TEXT_DATE
-  text_layer_destroy(text_date_layer);
-  #endif
+  if (time_layer_exists) text_layer_destroy(text_time_layer);
+  if (date_layer_exists) text_layer_destroy(text_date_layer);
 }
 
 int main(void) {
@@ -325,19 +399,3 @@ int main(void) {
   app_event_loop();
   deinit();
 }
-
-/*
-void pbl_main(void *params) {
-  PebbleAppHandlers handlers = {
-    .init_handler = &handle_init,
-
-    // Handle time updates
-    .tick_info = {
-      .tick_handler = &handle_second_tick,
-      .tick_units = SECOND_UNIT
-    }
-
-  };
-  app_event_loop(params, &handlers);
-}
-*/
